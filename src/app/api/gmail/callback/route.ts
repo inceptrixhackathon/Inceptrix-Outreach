@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { google } from "googleapis";
-import { createAdminClient } from "@/lib/supabase-server";
+import { createServerSideClient, createAdminClient } from "@/lib/supabase-server";
 import { getOAuth2Client, encrypt } from "@/lib/gmail";
 
 export async function GET(request: NextRequest) {
@@ -9,6 +9,28 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
 
   const baseUrl = request.nextUrl.origin;
+
+  // 1. Verify caller has an active leader/admin session
+  try {
+    const supabase = await createServerSideClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.redirect(`${baseUrl}/login?error=Unauthorized`);
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, is_active")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile || !profile.is_active || (profile.role !== "admin" && profile.role !== "leader")) {
+      return NextResponse.redirect(`${baseUrl}/dashboard?error=Forbidden`);
+    }
+  } catch (authErr) {
+    return NextResponse.redirect(`${baseUrl}/login?error=SessionExpired`);
+  }
 
   if (error || !code) {
     return NextResponse.redirect(

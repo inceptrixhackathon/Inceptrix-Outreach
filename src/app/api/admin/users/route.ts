@@ -84,7 +84,13 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, user: newUser.user });
+    return NextResponse.json({
+      success: true,
+      userId: newUser.user?.id,
+      email,
+      full_name,
+      role: role || "member",
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Internal server error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
     if (profError || !profile) {
       return NextResponse.json(
-        { error: "Invalid login credentials. User not found in system." },
+        { error: "Invalid email or password. Please try again." },
         { status: 401 }
       );
     }
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     // 2. Direct password verification against profiles table
     if (profile.password !== cleanPassword) {
       return NextResponse.json(
-        { error: "Invalid login credentials. Please check your password." },
+        { error: "Invalid email or password. Please try again." },
         { status: 401 }
       );
     }
