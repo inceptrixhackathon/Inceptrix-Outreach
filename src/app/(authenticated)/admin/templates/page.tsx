@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Mail, MessageCircle, Eye, Save, Send, History, Check, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Mail, MessageCircle, Eye, Save, Send, Check, AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -10,33 +10,191 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { createClient } from "@/lib/supabase-client";
 import { dummyEmailTemplate, dummyWhatsappTemplate } from "@/lib/dummy-data";
 
 export default function AdminTemplatesPage() {
-  // Email Template State
-  const [emailSubject, setEmailSubject] = useState(dummyEmailTemplate.subject || "");
-  const [emailHtml, setEmailHtml] = useState(dummyEmailTemplate.html_body || "");
-  const [emailSaved, setEmailSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // WhatsApp Template State
-  const [whatsappBody, setWhatsappBody] = useState(dummyWhatsappTemplate.whatsapp_body || "");
-  const [whatsappSaved, setWhatsappSaved] = useState(false);
+  // Email state
+  const [emailTemplateId, setEmailTemplateId] = useState<string | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailHtml, setEmailHtml] = useState("");
+  const [emailVersion, setEmailVersion] = useState(1);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<string | null>(null);
 
-  const handleSaveEmail = () => {
-    setEmailSaved(true);
-    setTimeout(() => setEmailSaved(false), 3000);
+  // WhatsApp state
+  const [whatsappTemplateId, setWhatsappTemplateId] = useState<string | null>(null);
+  const [whatsappBody, setWhatsappBody] = useState("");
+  const [whatsappVersion, setWhatsappVersion] = useState(1);
+  const [whatsappSaving, setWhatsappSaving] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const loadTemplates = async () => {
+    setLoading(true);
+    const supabase = createClient();
+
+    try {
+      // 1. Fetch Email Template
+      const { data: emailData, error: emailErr } = await supabase
+        .from("message_templates")
+        .select("*")
+        .eq("channel", "email")
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (emailData) {
+        setEmailTemplateId(emailData.id);
+        setEmailSubject(emailData.subject || "");
+        setEmailHtml(emailData.html_body || "");
+        setEmailVersion(emailData.version || 1);
+      } else {
+        setEmailSubject(dummyEmailTemplate.subject || "");
+        setEmailHtml(dummyEmailTemplate.html_body || "");
+      }
+
+      // 2. Fetch WhatsApp Template
+      const { data: waData, error: waErr } = await supabase
+        .from("message_templates")
+        .select("*")
+        .eq("channel", "whatsapp")
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (waData) {
+        setWhatsappTemplateId(waData.id);
+        setWhatsappBody(waData.whatsapp_body || "");
+        setWhatsappVersion(waData.version || 1);
+      } else {
+        setWhatsappBody(dummyWhatsappTemplate.whatsapp_body || "");
+      }
+    } catch (err) {
+      console.error("Error loading templates:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSaveWhatsApp = () => {
-    setWhatsappSaved(true);
-    setTimeout(() => setWhatsappSaved(false), 3000);
+  const handleSaveEmail = async (publish: boolean) => {
+    setEmailSaving(true);
+    setEmailStatus(null);
+    const supabase = createClient();
+
+    try {
+      const nextVersion = publish ? emailVersion + 1 : emailVersion;
+
+      if (emailTemplateId) {
+        const { error } = await supabase
+          .from("message_templates")
+          .update({
+            subject: emailSubject,
+            html_body: emailHtml,
+            text_body: emailSubject,
+            version: nextVersion,
+            is_published: publish ? true : false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", emailTemplateId);
+
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("message_templates")
+          .insert({
+            channel: "email",
+            template_name: "Inceptrix Email Template",
+            subject: emailSubject,
+            html_body: emailHtml,
+            text_body: emailSubject,
+            version: 1,
+            is_published: true,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) setEmailTemplateId(data.id);
+      }
+
+      if (publish) setEmailVersion(nextVersion);
+      setEmailStatus(publish ? "Template published to Supabase!" : "Draft saved to Supabase!");
+      setTimeout(() => setEmailStatus(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save email template";
+      setEmailStatus(`Error: ${msg}`);
+    } finally {
+      setEmailSaving(false);
+    }
   };
+
+  const handleSaveWhatsApp = async (publish: boolean) => {
+    setWhatsappSaving(true);
+    setWhatsappStatus(null);
+    const supabase = createClient();
+
+    try {
+      const nextVersion = publish ? whatsappVersion + 1 : whatsappVersion;
+
+      if (whatsappTemplateId) {
+        const { error } = await supabase
+          .from("message_templates")
+          .update({
+            whatsapp_body: whatsappBody,
+            version: nextVersion,
+            is_published: publish ? true : false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", whatsappTemplateId);
+
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("message_templates")
+          .insert({
+            channel: "whatsapp",
+            template_name: "Inceptrix WhatsApp Template",
+            whatsapp_body: whatsappBody,
+            version: 1,
+            is_published: true,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) setWhatsappTemplateId(data.id);
+      }
+
+      if (publish) setWhatsappVersion(nextVersion);
+      setWhatsappStatus(publish ? "WhatsApp template published to Supabase!" : "Draft saved to Supabase!");
+      setTimeout(() => setWhatsappStatus(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save WhatsApp template";
+      setWhatsappStatus(`Error: ${msg}`);
+    } finally {
+      setWhatsappSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Template Management"
-        description="Edit, preview, and publish centralized email and WhatsApp templates without code changes."
+        description="Edit, preview, and publish centralized email and WhatsApp templates directly to Supabase."
       />
 
       <Tabs defaultValue="email" className="space-y-6">
@@ -63,7 +221,7 @@ export default function AdminTemplatesPage() {
                     <CardDescription className="text-xs">HTML source code and subject configuration</CardDescription>
                   </div>
                   <Badge variant="outline" className="text-xs border-brand-sage bg-brand-sage/20 text-brand-dark">
-                    Version {dummyEmailTemplate.version} · Published
+                    Version {emailVersion} · Published
                   </Badge>
                 </div>
               </CardHeader>
@@ -75,6 +233,7 @@ export default function AdminTemplatesPage() {
                     value={emailSubject}
                     onChange={(e) => setEmailSubject(e.target.value)}
                     className="text-sm font-medium"
+                    placeholder="Enter email subject line..."
                   />
                 </div>
 
@@ -89,23 +248,36 @@ export default function AdminTemplatesPage() {
                     value={emailHtml}
                     onChange={(e) => setEmailHtml(e.target.value)}
                     className="font-mono text-xs leading-relaxed"
+                    placeholder="<!DOCTYPE html>..."
                   />
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleSaveEmail} className="text-xs gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={emailSaving}
+                      onClick={() => handleSaveEmail(false)}
+                      className="text-xs gap-1.5"
+                    >
                       <Save className="h-3.5 w-3.5" />
                       Save Draft
                     </Button>
-                    <Button size="sm" onClick={handleSaveEmail} className="text-xs gap-1.5 bg-primary hover:bg-primary/90 text-white">
-                      <Send className="h-3.5 w-3.5" />
+                    <Button
+                      size="sm"
+                      disabled={emailSaving}
+                      onClick={() => handleSaveEmail(true)}
+                      className="text-xs gap-1.5 bg-primary hover:bg-primary/90 text-white"
+                    >
+                      {emailSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Publish Template
                     </Button>
                   </div>
-                  {emailSaved && (
-                    <span className="text-xs text-emerald-700 flex items-center gap-1 font-medium">
-                      <Check className="h-3.5 w-3.5" /> Saved & Published
+                  {emailStatus && (
+                    <span className={`text-xs flex items-center gap-1 font-medium ${emailStatus.startsWith('Error') ? 'text-red-600' : 'text-emerald-700'}`}>
+                      {emailStatus.startsWith('Error') ? <AlertCircle className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                      {emailStatus}
                     </span>
                   )}
                 </div>
@@ -138,9 +310,6 @@ export default function AdminTemplatesPage() {
                     className="h-[430px] w-full"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  * Note: Email clients (Gmail, Outlook, Apple Mail) may render custom styling according to their specific email engines.
-                </p>
               </CardContent>
             </Card>
           </div>
@@ -158,7 +327,7 @@ export default function AdminTemplatesPage() {
                     <CardDescription className="text-xs">Plain text copy formatted with WhatsApp markdown</CardDescription>
                   </div>
                   <Badge variant="outline" className="text-xs border-brand-sage bg-brand-sage/20 text-brand-dark">
-                    Version {dummyWhatsappTemplate.version} · Published
+                    Version {whatsappVersion} · Published
                   </Badge>
                 </div>
               </CardHeader>
@@ -180,18 +349,30 @@ export default function AdminTemplatesPage() {
 
                 <div className="flex items-center justify-between pt-2">
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleSaveWhatsApp} className="text-xs gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={whatsappSaving}
+                      onClick={() => handleSaveWhatsApp(false)}
+                      className="text-xs gap-1.5"
+                    >
                       <Save className="h-3.5 w-3.5" />
                       Save Draft
                     </Button>
-                    <Button size="sm" onClick={handleSaveWhatsApp} className="text-xs gap-1.5 bg-primary hover:bg-primary/90 text-white">
-                      <Send className="h-3.5 w-3.5" />
+                    <Button
+                      size="sm"
+                      disabled={whatsappSaving}
+                      onClick={() => handleSaveWhatsApp(true)}
+                      className="text-xs gap-1.5 bg-primary hover:bg-primary/90 text-white"
+                    >
+                      {whatsappSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Publish Template
                     </Button>
                   </div>
-                  {whatsappSaved && (
-                    <span className="text-xs text-emerald-700 flex items-center gap-1 font-medium">
-                      <Check className="h-3.5 w-3.5" /> Saved & Published
+                  {whatsappStatus && (
+                    <span className={`text-xs flex items-center gap-1 font-medium ${whatsappStatus.startsWith('Error') ? 'text-red-600' : 'text-emerald-700'}`}>
+                      {whatsappStatus.startsWith('Error') ? <AlertCircle className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                      {whatsappStatus}
                     </span>
                   )}
                 </div>
@@ -223,4 +404,3 @@ export default function AdminTemplatesPage() {
     </div>
   );
 }
-

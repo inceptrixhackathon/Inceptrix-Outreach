@@ -1,32 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { Mail, Paperclip, Send, FileText, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Mail, Paperclip, Send, FileText, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { createClient } from "@/lib/supabase-client";
 import { dummyEmailTemplate } from "@/lib/dummy-data";
+import type { MessageTemplate } from "@/types";
 
 export default function SendEmailPage() {
   const [recipient, setRecipient] = useState("");
+  const [template, setTemplate] = useState<MessageTemplate>(dummyEmailTemplate);
+  const [brochureName, setBrochureName] = useState("inceptrix_official_brochure_2025.pdf");
+  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const template = dummyEmailTemplate;
+  useEffect(() => {
+    loadTemplateAndBrochure();
+  }, []);
+
+  const loadTemplateAndBrochure = async () => {
+    setLoading(true);
+    const supabase = createClient();
+    try {
+      // 1. Fetch latest published email template
+      const { data: tpl } = await supabase
+        .from("message_templates")
+        .select("*")
+        .eq("channel", "email")
+        .eq("is_published", true)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (tpl) setTemplate(tpl);
+
+      // 2. Fetch active brochure name
+      const { data: setting } = await supabase
+        .from("application_settings")
+        .select("value")
+        .eq("key", "active_brochure_path")
+        .maybeSingle();
+
+      if (setting?.value) setBrochureName(setting.value);
+    } catch (err) {
+      console.error("Failed to load email template:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!recipient) return;
     setSending(true);
     setStatusMessage(null);
 
-    // Mock send for Phase 1 UI Foundation
+    // Phase 4 will dispatch via real central Gmail API route /api/email/send
     setTimeout(() => {
       setSending(false);
-      setStatusMessage("Submitted to Gmail (Simulation)");
-      setRecipient("");
+      setStatusMessage("Phase 4 Gmail Integration is next. Ready for sending!");
       setTimeout(() => setStatusMessage(null), 4000);
     }, 1200);
   };
@@ -58,7 +95,7 @@ export default function SendEmailPage() {
               className="max-w-md"
             />
             <p className="text-xs text-muted-foreground">
-              Enter the target email address. Email will be sent from the organization&apos;s central account.
+              Enter target email. Dispatched from organization&apos;s authorized central Gmail account.
             </p>
           </div>
         </CardContent>
@@ -97,9 +134,9 @@ export default function SendEmailPage() {
 
           <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
             <Paperclip className="h-4 w-4 text-brand-dark" />
-            <span className="font-medium text-foreground">inceptrix_brochure_2025.pdf</span>
+            <span className="font-medium text-foreground">{brochureName}</span>
             <Badge variant="secondary" className="text-xs bg-brand-mint text-brand-dark">
-              Auto-attached
+              Auto-attached from Storage
             </Badge>
           </div>
         </CardContent>
@@ -112,11 +149,11 @@ export default function SendEmailPage() {
           disabled={!recipient || sending}
           className="gap-2 bg-primary hover:bg-primary/90 text-white"
         >
-          <Send className="h-4 w-4" />
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           {sending ? "Sending via Gmail..." : "Send Email"}
         </Button>
         {statusMessage && (
-          <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-md border border-emerald-200">
+          <div className="flex items-center gap-2 text-sm text-brand-dark bg-brand-mint/40 px-3 py-1.5 rounded-md border border-brand-mint">
             <CheckCircle2 className="h-4 w-4" />
             {statusMessage}
           </div>
@@ -125,4 +162,3 @@ export default function SendEmailPage() {
     </div>
   );
 }
-

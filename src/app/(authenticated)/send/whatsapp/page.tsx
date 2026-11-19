@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   MessageCircle,
   ExternalLink,
@@ -8,6 +8,7 @@ import {
   Phone,
   CheckCircle2,
   Info,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,35 +16,138 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { createClient } from "@/lib/supabase-client";
 import { dummyWhatsappTemplate } from "@/lib/dummy-data";
+import type { MessageTemplate } from "@/types";
 
 export default function SendWhatsAppPage() {
   const [phone, setPhone] = useState("");
+  const [template, setTemplate] = useState<MessageTemplate>(dummyWhatsappTemplate);
+  const [countryCode, setCountryCode] = useState("+91");
+  const [brochurePath, setBrochurePath] = useState("inceptrix_official_brochure_2025.pdf");
+  const [hasBrochure, setHasBrochure] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [linkOpened, setLinkOpened] = useState(false);
   const [markedSent, setMarkedSent] = useState(false);
 
-  const template = dummyWhatsappTemplate;
-  const countryCode = "+91";
+  useEffect(() => {
+    loadTemplateAndSettings();
+  }, []);
+
+  const loadTemplateAndSettings = async () => {
+    const supabase = createClient();
+    try {
+      // 1. Fetch latest published whatsapp template
+      const { data: tpl } = await supabase
+        .from("message_templates")
+        .select("*")
+        .eq("channel", "whatsapp")
+        .eq("is_published", true)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (tpl) setTemplate(tpl);
+
+      // 2. Fetch app settings
+      const { data: settings } = await supabase
+        .from("application_settings")
+        .select("key, value");
+
+      if (settings) {
+        settings.forEach((s) => {
+          if (s.key === "default_country_code") setCountryCode(s.value);
+          if (s.key === "active_brochure_path") setBrochurePath(s.value);
+        });
+      }
+
+      // 3. Check brochure file exists in storage
+      const { data: files } = await supabase.storage
+        .from("brochures")
+        .list();
+      if (files && files.length > 0) setHasBrochure(true);
+    } catch (err) {
+      console.error("Failed to load WhatsApp template:", err);
+    }
+  };
 
   const getFormattedNumber = () => {
     const cleaned = phone.replace(/[\s\-()]/g, "");
-    if (cleaned.startsWith("+91")) return cleaned.replace("+", "");
-    if (cleaned.startsWith("91") && cleaned.length > 10) return cleaned;
-    return `91${cleaned}`;
+    const code = countryCode.replace("+", "");
+    if (cleaned.startsWith(`+${code}`)) return cleaned.replace("+", "");
+    if (cleaned.startsWith(code) && cleaned.length > 10) return cleaned;
+    return `${code}${cleaned}`;
   };
 
-  const handleOpenWhatsApp = () => {
+  const handleOpenWhatsApp = async () => {
     if (!phone) return;
     const number = getFormattedNumber();
     const message = encodeURIComponent(template.whatsapp_body || "");
     const url = `https://wa.me/${number}?text=${message}`;
+
     window.open(url, "_blank");
     setLinkOpened(true);
     setMarkedSent(false);
+
+    // Record honest "link_opened" activity in Supabase
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("activity_logs").insert({
+          user_id: user.id,
+          channel: "whatsapp",
+          recipient: `+${number}`,
+          action: "open_whatsapp",
+          status: "link_opened",
+          template_version: template.version,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to log activity:", err);
+    }
   };
 
-  const handleMarkSent = () => {
+  const handleMarkSent = async () => {
     setMarkedSent(true);
+    const number = getFormattedNumber();
+
+    // Record honest "marked_sent_by_member" activity in Supabase
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("activity_logs").insert({
+          user_id: user.id,
+          channel: "whatsapp",
+          recipient: `+${number}`,
+          action: "mark_sent",
+          status: "marked_sent_by_member",
+          template_version: template.version,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to log activity:", err);
+    }
+  };
+
+  const handleDownloadBrochure = async () => {
+    setDownloading(true);
+    const supabase = createClient();
+    try {
+      const { data, error } = await supabase.storage
+        .from("brochures")
+        .createSignedUrl(brochurePath, 300);
+
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank");
+      }
+    } catch (err) {
+      console.error("Failed to download brochure:", err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleReset = () => {
@@ -56,7 +160,7 @@ export default function SendWhatsAppPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Send WhatsApp"
-        description="Launch an official WhatsApp chat with Indian recipients (+91) with predefined invitation copy."
+        description="Launch an official WhatsApp chat with Indian recipients with predefined invitation copy."
       />
 
       {/* Phone Input */}
@@ -84,7 +188,7 @@ export default function SendWhatsAppPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Enter 10-digit mobile number. Country code (+91) is locked for Indian outreach.
+              Enter 10-digit mobile number. Country code ({countryCode}) is applied automatically.
             </p>
           </div>
         </CardContent>
@@ -120,19 +224,24 @@ export default function SendWhatsAppPage() {
               <ol className="mt-1 list-inside list-decimal space-y-1 text-xs opacity-90">
                 <li>Download the brochure PDF below to your computer</li>
                 <li>Click <strong>&quot;Open WhatsApp&quot;</strong> to open the conversation via official Click-to-Chat</li>
-                <li>Attach the downloaded PDF directly in WhatsApp Web / App</li>
+                <li>Attach the downloaded PDF directly in WhatsApp</li>
                 <li>Press Send in WhatsApp</li>
-                <li>Return here and click <strong>&quot;Mark as Sent&quot;</strong> to record status</li>
+                <li>Return here and click <strong>&quot;Mark as Sent&quot;</strong> to record status in Supabase</li>
               </ol>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Button variant="outline" className="gap-2 border-border/80">
-              <Download className="h-4 w-4" />
+            <Button
+              variant="outline"
+              disabled={!hasBrochure || downloading}
+              onClick={handleDownloadBrochure}
+              className="gap-2 border-border/80"
+            >
+              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               Download Brochure PDF
               <Badge variant="secondary" className="ml-1 text-xs bg-brand-mint text-brand-dark">
-                Ready
+                {hasBrochure ? "Ready" : "Awaiting Upload"}
               </Badge>
             </Button>
 
@@ -166,7 +275,7 @@ export default function SendWhatsAppPage() {
               ) : (
                 <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-md border border-emerald-200">
                   <CheckCircle2 className="h-4 w-4" />
-                  Marked as sent by member
+                  Marked as sent by member (Logged in Supabase)
                 </div>
               )}
               <Button
@@ -184,4 +293,3 @@ export default function SendWhatsAppPage() {
     </div>
   );
 }
-

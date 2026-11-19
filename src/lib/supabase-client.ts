@@ -9,3 +9,4 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
 export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
+

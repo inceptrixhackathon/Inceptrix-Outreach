@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Activity, Search, Filter, Mail, MessageCircle, Download } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Activity, Search, Mail, MessageCircle, Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -12,18 +12,52 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { dummyActivityLogs, dummyMembers } from "@/lib/dummy-data";
+import { createClient } from "@/lib/supabase-client";
+import type { ActivityLog, Profile } from "@/types";
 
 export default function AdminActivityPage() {
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const [selectedUser, setSelectedUser] = useState<string>("all");
 
-  const filteredLogs = dummyActivityLogs.filter((log) => {
-    const matchesSearch = log.recipient.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    const supabase = createClient();
+    try {
+      // 1. Fetch team members for filter dropdown
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("full_name", { ascending: true });
+      if (profilesData) setTeamMembers(profilesData);
+
+      // 2. Fetch all activity logs with user info
+      const { data: logsData, error } = await supabase
+        .from("activity_logs")
+        .select("*, profiles:user_id(full_name, email)")
+        .order("created_at", { ascending: false });
+
+      if (logsData) {
+        setLogs(logsData as unknown as ActivityLog[]);
+      }
+    } catch (err) {
+      console.error("Failed to load activity logs:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredLogs = logs.filter((log) => {
+    const matchesSearch = log.recipient?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesChannel = selectedChannel === "all" || log.channel === selectedChannel;
     const matchesUser = selectedUser === "all" || log.user_id === selectedUser;
     return matchesSearch && matchesChannel && matchesUser;
@@ -33,7 +67,7 @@ export default function AdminActivityPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Complete Activity History"
-        description="Audit all communications initiated across team members, channels, and campaigns."
+        description="Audit all communications across all team members, channels, and campaigns from Supabase."
       />
 
       <Card className="border-border/60">
@@ -77,7 +111,7 @@ export default function AdminActivityPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
                 >
                   <option value="all">All Team Members</option>
-                  {dummyMembers.map((m) => (
+                  {teamMembers.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.full_name}
                     </option>
@@ -101,10 +135,16 @@ export default function AdminActivityPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLogs.length === 0 ? (
+                {loading ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
-                      No communication records found for the applied filter.
+                      <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredLogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
+                      No communication records found in Supabase.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -147,4 +187,3 @@ export default function AdminActivityPage() {
     </div>
   );
 }
-
