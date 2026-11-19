@@ -2,9 +2,9 @@ import type { Profile, MessageTemplate, ActivityLog } from "@/types";
 
 export const dummyUser: Profile = {
   id: "user-1",
-  full_name: "Swastik Kumar",
-  email: "swastik@inceptrix.com",
-  role: "admin",
+  full_name: "Team Member",
+  email: "member@inceptrix.com",
+  role: "member",
   is_active: true,
   created_at: "2024-01-15T10:00:00Z",
   updated_at: "2024-01-15T10:00:00Z",

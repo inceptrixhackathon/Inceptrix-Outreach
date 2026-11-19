@@ -39,6 +39,7 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
       await supabase.auth.signOut();
     }
     router.push("/login");
+    router.refresh();
   };
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm lg:px-6">

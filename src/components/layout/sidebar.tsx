@@ -55,6 +55,7 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
       await supabase.auth.signOut();
     }
     router.push("/login");
+    router.refresh();
   };
 
   const isLeader = role === "admin" || role === "leader";
