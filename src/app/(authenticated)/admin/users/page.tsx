@@ -191,7 +191,7 @@ export default function AdminUsersPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
                 >
                   <option value="member">Member (Outreach Only)</option>
-                  <option value="admin">Administrator (Full Control)</option>
+                  <option value="leader">Leader (Full Control)</option>
                 </select>
               </div>
               <DialogFooter className="pt-2">

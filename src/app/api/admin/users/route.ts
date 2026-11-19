@@ -17,8 +17,8 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .single();
 
-    if (!callerProfile || !callerProfile.is_active || callerProfile.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+    if (!callerProfile || !callerProfile.is_active || (callerProfile.role !== "admin" && callerProfile.role !== "leader")) {
+      return NextResponse.json({ error: "Forbidden: Leader access required" }, { status: 403 });
     }
 
     // 2. Parse request payload
@@ -62,3 +62,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

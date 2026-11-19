@@ -57,7 +57,8 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
     router.push("/login");
   };
 
-  const navItems = role === "admin" ? [...MEMBER_NAV, ...ADMIN_NAV] : MEMBER_NAV;
+  const isLeader = role === "admin" || role === "leader";
+  const navItems = isLeader ? [...MEMBER_NAV, ...ADMIN_NAV] : MEMBER_NAV;
 
   return (
     <>
@@ -122,8 +123,8 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
               );
             })}
 
-            {/* Admin section */}
-            {role === "admin" && (
+            {/* Admin/Leader section */}
+            {isLeader && (
               <>
                 <Separator className="my-4" />
                 <p className="mb-2 px-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">

@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!profile || !profile.is_active || profile.role !== "admin") {
+    if (!profile || !profile.is_active || (profile.role !== "admin" && profile.role !== "leader")) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
