@@ -18,7 +18,7 @@ export default function SendEmailPage() {
   const [brochureName, setBrochureName] = useState("inceptrix_official_brochure_2025.pdf");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     loadTemplateAndBrochure();
@@ -28,7 +28,6 @@ export default function SendEmailPage() {
     setLoading(true);
     const supabase = createClient();
     try {
-      // 1. Fetch latest published email template
       const { data: tpl } = await supabase
         .from("message_templates")
         .select("*")
@@ -40,7 +39,6 @@ export default function SendEmailPage() {
 
       if (tpl) setTemplate(tpl);
 
-      // 2. Fetch active brochure name
       const { data: setting } = await supabase
         .from("application_settings")
         .select("value")
@@ -56,16 +54,39 @@ export default function SendEmailPage() {
   };
 
   const handleSend = async () => {
-    if (!recipient) return;
-    setSending(true);
-    setStatusMessage(null);
+    if (!recipient || sending) return;
 
-    // Phase 4 will dispatch via real central Gmail API route /api/email/send
-    setTimeout(() => {
+    setSending(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to submit email to Gmail");
+      }
+
+      setResult({
+        success: true,
+        message: "Submitted to Gmail successfully! Logged in communication history.",
+      });
+      setRecipient("");
+      setTimeout(() => setResult(null), 6000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to dispatch email";
+      setResult({
+        success: false,
+        message: msg,
+      });
+    } finally {
       setSending(false);
-      setStatusMessage("Phase 4 Gmail Integration is next. Ready for sending!");
-      setTimeout(() => setStatusMessage(null), 4000);
-    }, 1200);
+    }
   };
 
   return (
@@ -74,6 +95,23 @@ export default function SendEmailPage() {
         title="Send Email"
         description="Dispatch the official invitation email with automatic brochure attachment via central Gmail."
       />
+
+      {result && (
+        <div
+          className={`flex items-start gap-2.5 rounded-md p-3.5 text-xs ${
+            result.success
+              ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+              : "bg-red-50 border border-red-200 text-red-800"
+          }`}
+        >
+          {result.success ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
+          )}
+          <span>{result.message}</span>
+        </div>
+      )}
 
       {/* Recipient Input */}
       <Card className="border-border/60">
@@ -92,10 +130,11 @@ export default function SendEmailPage() {
               placeholder="e.g. principal@college.edu.in"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
+              disabled={sending}
               className="max-w-md"
             />
             <p className="text-xs text-muted-foreground">
-              Enter target email. Dispatched from organization&apos;s authorized central Gmail account.
+              Dispatched server-side through central Gmail. Team member details are never exposed.
             </p>
           </div>
         </CardContent>
@@ -150,14 +189,8 @@ export default function SendEmailPage() {
           className="gap-2 bg-primary hover:bg-primary/90 text-white"
         >
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {sending ? "Sending via Gmail..." : "Send Email"}
+          {sending ? "Submitting to Gmail..." : "Send Email"}
         </Button>
-        {statusMessage && (
-          <div className="flex items-center gap-2 text-sm text-brand-dark bg-brand-mint/40 px-3 py-1.5 rounded-md border border-brand-mint">
-            <CheckCircle2 className="h-4 w-4" />
-            {statusMessage}
-          </div>
-        )}
       </div>
     </div>
   );

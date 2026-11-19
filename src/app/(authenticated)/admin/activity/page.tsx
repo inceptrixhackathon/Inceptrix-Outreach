@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Activity, Search, Mail, MessageCircle, Loader2 } from "lucide-react";
+import { Activity, Search, Mail, MessageCircle, Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -68,7 +69,18 @@ export default function AdminActivityPage() {
       <PageHeader
         title="Complete Activity History"
         description="Audit all communications across all team members, channels, and campaigns from Supabase."
-      />
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={loadData}
+          className="text-xs gap-1.5"
+          disabled={loading}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          Refresh Audit Trail
+        </Button>
+      </PageHeader>
 
       <Card className="border-border/60">
         <CardHeader className="pb-3">

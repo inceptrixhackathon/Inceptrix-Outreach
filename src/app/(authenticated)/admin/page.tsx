@@ -18,6 +18,10 @@ export default function AdminDashboardPage() {
   const [emailTemplate, setEmailTemplate] = useState<MessageTemplate | null>(null);
   const [waTemplate, setWaTemplate] = useState<MessageTemplate | null>(null);
   const [activeBrochureName, setActiveBrochureName] = useState("inceptrix_official_brochure_2025.pdf");
+  const [gmailStatus, setGmailStatus] = useState<{ isConnected: boolean; connectedEmail: string | null }>({
+    isConnected: false,
+    connectedEmail: null,
+  });
 
   useEffect(() => {
     loadOverview();
@@ -59,6 +63,20 @@ export default function AdminDashboardPage() {
         .eq("key", "active_brochure_path")
         .maybeSingle();
       if (setting?.value) setActiveBrochureName(setting.value);
+
+      // 5. Fetch Gmail integration status
+      try {
+        const gmailRes = await fetch("/api/gmail/status");
+        if (gmailRes.ok) {
+          const gData = await gmailRes.json();
+          setGmailStatus({
+            isConnected: !!gData.isConnected,
+            connectedEmail: gData.connectedEmail || null,
+          });
+        }
+      } catch (gErr) {
+        console.warn("Could not check Gmail status:", gErr);
+      }
     } catch (err) {
       console.error("Failed to load overview data:", err);
     } finally {
@@ -113,12 +131,24 @@ export default function AdminDashboardPage() {
           subtitle={`Total: ${members.length} provisioned accounts`}
           icon={<Users className="h-5 w-5 text-brand-dark" />}
         />
-        <StatsCard
-          title="Central Gmail Status"
-          value="Phase 4 Next"
-          subtitle="Configure in Gmail Settings"
-          icon={<AlertTriangle className="h-5 w-5 text-amber-600" />}
-        />
+        <Link href="/admin/gmail">
+          <StatsCard
+            title="Central Gmail Status"
+            value={gmailStatus.isConnected ? "Connected" : "Disconnected"}
+            subtitle={
+              gmailStatus.isConnected
+                ? gmailStatus.connectedEmail || "Authorized & Ready"
+                : "Action required: Connect in Gmail settings"
+            }
+            icon={
+              gmailStatus.isConnected ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              )
+            }
+          />
+        </Link>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

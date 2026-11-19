@@ -36,36 +36,28 @@ export default function LoginPage() {
     }
 
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) {
-        setErrorMessage(error.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.error || "Invalid login credentials.");
         setLoading(false);
         return;
       }
 
-      if (data.user) {
-        // Verify active status
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("is_active")
-          .eq("id", data.user.id)
-          .single();
-
-        if (profile && !profile.is_active) {
-          await supabase.auth.signOut();
-          setErrorMessage("This account has been deactivated. Please contact an administrator.");
-          setLoading(false);
-          return;
-        }
-
-        router.push("/dashboard");
-        router.refresh();
+      // Synchronize client-side auth instance with session
+      if (data.session) {
+        const supabase = createClient();
+        await supabase.auth.setSession(data.session);
       }
+
+      router.push("/dashboard");
+      router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to sign in. Please try again.";
       setErrorMessage(message);
