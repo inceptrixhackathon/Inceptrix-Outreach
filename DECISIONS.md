@@ -24,3 +24,4 @@
 - **Context**: Email and WhatsApp serve distinct outreach needs and mechanisms.
 - **Decision**: Kept Email and WhatsApp flows strictly independent. Email communicates via central Gmail API with automatic attachments; WhatsApp communicates via client-side `wa.me` links with honest tracking.
 - **Consequences**: Zero accidental dependency or mixing of recipient data between channels.
+

@@ -35,3 +35,4 @@
 2. On the central phone holding the personal WhatsApp account, go to **Settings > Linked Devices > Link a Device**.
 3. Scan the QR code on each laptop.
 4. The Inceptrix Outreach Portal will trigger official `https://wa.me/91XXXXXXXXXX?text=...` links directly into this active session.
+

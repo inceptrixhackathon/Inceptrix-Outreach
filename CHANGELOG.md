@@ -31,3 +31,4 @@
   - `/admin/gmail`: Central Gmail OAuth status and connection settings.
   - `/admin/settings`: Portal configuration management for application defaults.
 - **Build Verification**: Verified clean TypeScript compilation and static page generation across all 14 routes.
+

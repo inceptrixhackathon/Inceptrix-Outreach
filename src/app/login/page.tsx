@@ -2,27 +2,75 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, ArrowRight } from "lucide-react";
+import { Lock, Mail, ArrowRight, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { APP_NAME } from "@/lib/constants";
+import { createClient } from "@/lib/supabase-client";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // UI Mock for Phase 1 - In Phase 2 will call supabase.auth.signInWithPassword
-    setTimeout(() => {
+    setErrorMessage(null);
+
+    const hasSupabaseConfig =
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+    if (!hasSupabaseConfig) {
+      // Dev mode without Supabase env vars set yet
+      setTimeout(() => {
+        setLoading(false);
+        router.push("/dashboard");
+      }, 500);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        // Verify active status
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_active")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile && !profile.is_active) {
+          await supabase.auth.signOut();
+          setErrorMessage("This account has been deactivated. Please contact an administrator.");
+          setLoading(false);
+          return;
+        }
+
+        router.push("/dashboard");
+        router.refresh();
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to sign in. Please try again.";
+      setErrorMessage(message);
       setLoading(false);
-      router.push("/dashboard");
-    }, 600);
+    }
   };
 
   return (
@@ -46,6 +94,13 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
+              {errorMessage && (
+                <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-xs font-medium">Email address</Label>
                 <div className="relative">

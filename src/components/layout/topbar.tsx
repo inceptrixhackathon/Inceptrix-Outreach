@@ -1,6 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Menu } from "lucide-react";
+import { createClient } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -29,6 +31,15 @@ function getInitials(name: string): string {
 }
 
 export function Topbar({ user, onMenuClick }: TopbarProps) {
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    }
+    router.push("/login");
+  };
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm lg:px-6">
       <Button
@@ -73,7 +84,7 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
               Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>

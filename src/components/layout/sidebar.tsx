@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase-client";
 import {
   LayoutDashboard,
   Mail,
@@ -46,6 +47,15 @@ interface SidebarProps {
 
 export function Sidebar({ role, open, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    }
+    router.push("/login");
+  };
 
   const navItems = role === "admin" ? [...MEMBER_NAV, ...ADMIN_NAV] : MEMBER_NAV;
 
@@ -146,7 +156,10 @@ export function Sidebar({ role, open, onClose }: SidebarProps) {
 
         {/* Footer */}
         <div className="border-t border-sidebar-border p-3">
-          <button className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground">
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground cursor-pointer"
+          >
             <LogOut className="h-4 w-4" />
             Sign Out
           </button>
