@@ -45,12 +45,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: createError.message }, { status: 400 });
     }
 
-    // 4. Ensure profile exists and has correct metadata
+    // 4. Ensure profile exists and stores visible password
     if (newUser.user) {
       await adminSupabase.from("profiles").upsert({
         id: newUser.user.id,
         email,
         full_name,
+        password,
         role: role || "member",
         is_active: true,
       });

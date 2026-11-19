@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Users, UserPlus, Shield, User, Check, X, Search, Loader2, AlertCircle } from "lucide-react";
+import { Users, UserPlus, Shield, User, Check, X, Search, Loader2, AlertCircle, Eye, EyeOff, Copy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,8 @@ export default function AdminUsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // New user form state
   const [fullName, setFullName] = useState("");
@@ -63,6 +65,17 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const togglePasswordVisibility = (id: string) => {
+    setShowPasswords((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const copyPassword = (id: string, pwd?: string) => {
+    if (!pwd) return;
+    navigator.clipboard.writeText(pwd);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
@@ -128,7 +141,7 @@ export default function AdminUsersPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Team User Management"
-        description="Provision and control team member accounts directly in Supabase Auth & profiles."
+        description="Provision, control, and review team accounts, passwords, and roles directly."
       >
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger
@@ -143,7 +156,7 @@ export default function AdminUsersPage() {
             <DialogHeader>
               <DialogTitle className="text-base font-semibold">Provision Team Member</DialogTitle>
               <DialogDescription className="text-xs">
-                Creates an authenticated Supabase account for an authorized team member.
+                Creates an account and stores the visible credentials for easy reference.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateUser} className="space-y-4 py-2">
@@ -171,16 +184,17 @@ export default function AdminUsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="user-password" className="text-xs font-medium">Initial Password</Label>
+                <Label htmlFor="user-password" className="text-xs font-medium">Password</Label>
                 <Input
                   id="user-password"
-                  type="password"
-                  placeholder="Min 6 characters"
+                  type="text"
+                  placeholder="e.g. Rahul@2025"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="text-sm"
+                  className="text-sm font-mono"
                   required
                 />
+                <p className="text-[11px] text-muted-foreground">Stored visibly in your profiles table for easy team handoff.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="user-role" className="text-xs font-medium">Role Permission</Label>
@@ -240,6 +254,7 @@ export default function AdminUsersPage() {
                 <TableRow>
                   <TableHead className="text-xs font-semibold">User</TableHead>
                   <TableHead className="text-xs font-semibold">Email</TableHead>
+                  <TableHead className="w-[140px] text-xs font-semibold">Password</TableHead>
                   <TableHead className="w-[100px] text-xs font-semibold">Role</TableHead>
                   <TableHead className="w-[100px] text-xs font-semibold">Status</TableHead>
                   <TableHead className="w-[120px] text-right text-xs font-semibold">Actions</TableHead>
@@ -248,58 +263,86 @@ export default function AdminUsersPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
                       No accounts provisioned yet. Click &quot;Add Team Member&quot; to create one.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredUsers.map((u) => (
-                    <TableRow key={u.id} className="text-sm hover:bg-muted/30">
-                      <TableCell className="font-medium text-xs sm:text-sm">
-                        <div className="flex items-center gap-2">
-                          {u.role === "admin" ? (
-                            <Shield className="h-3.5 w-3.5 text-brand-dark" />
+                  filteredUsers.map((u) => {
+                    const isVisible = showPasswords[u.id];
+                    return (
+                      <TableRow key={u.id} className="text-sm hover:bg-muted/30">
+                        <TableCell className="font-medium text-xs sm:text-sm">
+                          <div className="flex items-center gap-2">
+                            {u.role === "admin" || u.role === "leader" ? (
+                              <Shield className="h-3.5 w-3.5 text-brand-dark" />
+                            ) : (
+                              <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span>{u.full_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{u.email}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5 font-mono text-xs">
+                            <span>{isVisible ? u.password || "••••••••" : "••••••••"}</span>
+                            {u.password && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => togglePasswordVisibility(u.id)}
+                                  className="text-muted-foreground hover:text-foreground p-0.5"
+                                  title={isVisible ? "Hide password" : "Show password"}
+                                >
+                                  {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => copyPassword(u.id, u.password)}
+                                  className="text-muted-foreground hover:text-foreground p-0.5"
+                                  title="Copy password"
+                                >
+                                  {copiedId === u.id ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[11px] capitalize">
+                            {u.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {u.is_active ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                              <Check className="h-3 w-3" /> Active
+                            </span>
                           ) : (
-                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                              <X className="h-3 w-3" /> Inactive
+                            </span>
                           )}
-                          <span>{u.full_name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{u.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[11px] capitalize">
-                          {u.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {u.is_active ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-                            <Check className="h-3 w-3" /> Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-red-600">
-                            <X className="h-3 w-3" /> Inactive
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleUserStatus(u.id, u.is_active)}
-                          className="text-xs text-muted-foreground hover:text-foreground h-7 px-2"
-                        >
-                          {u.is_active ? "Deactivate" : "Activate"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleUserStatus(u.id, u.is_active)}
+                            className="text-xs text-muted-foreground hover:text-foreground h-7 px-2"
+                          >
+                            {u.is_active ? "Deactivate" : "Activate"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
