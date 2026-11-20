@@ -65,10 +65,11 @@ export function decrypt(encryptedText: string): string {
 }
 
 // --- GOOGLE OAUTH CLIENT ---
-export function getOAuth2Client() {
+export function getOAuth2Client(customRedirectUri?: string) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri =
+    customRedirectUri ||
     process.env.GOOGLE_REDIRECT_URI ||
     "http://localhost:3000/api/gmail/callback";
 

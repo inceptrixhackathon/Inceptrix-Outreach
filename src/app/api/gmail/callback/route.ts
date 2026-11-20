@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { google } from "googleapis";
-import { createServerSideClient, createAdminClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-server";
 import { getOAuth2Client, encrypt } from "@/lib/gmail";
 
 export async function GET(request: NextRequest) {
@@ -9,38 +9,20 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
 
   const baseUrl = request.nextUrl.origin;
-
-  // 1. Verify caller has an active leader/admin session
-  try {
-    const supabase = await createServerSideClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.redirect(`${baseUrl}/login?error=Unauthorized`);
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, is_active")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || !profile.is_active || (profile.role !== "admin" && profile.role !== "leader")) {
-      return NextResponse.redirect(`${baseUrl}/dashboard?error=Forbidden`);
-    }
-  } catch (authErr) {
-    return NextResponse.redirect(`${baseUrl}/login?error=SessionExpired`);
-  }
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/gmail/callback`;
 
   if (error || !code) {
     return NextResponse.redirect(
-      `${baseUrl}/admin/gmail?error=${encodeURIComponent(error || "Authorization canceled")}`
+      `${baseUrl}/admin/gmail?error=${encodeURIComponent(
+        error || "Authorization canceled"
+      )}`
     );
   }
 
   try {
     // 1. Exchange authorization code for tokens
-    const oauth2Client = getOAuth2Client();
+    const oauth2Client = getOAuth2Client(redirectUri);
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
@@ -53,12 +35,14 @@ export async function GET(request: NextRequest) {
     const refreshToken = tokens.refresh_token;
     if (!refreshToken) {
       throw new Error(
-        "Google did not return a refresh token. Please disconnect and reconnect with prompt=consent."
+        "Google did not return a refresh token. Please reconnect with consent prompt."
       );
     }
 
     const encryptedRefresh = encrypt(refreshToken);
-    const encryptedAccess = tokens.access_token ? encrypt(tokens.access_token) : null;
+    const encryptedAccess = tokens.access_token
+      ? encrypt(tokens.access_token)
+      : null;
 
     // 4. Save to private_integrations table in Supabase
     const adminSupabase = createAdminClient();
@@ -78,7 +62,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(`${baseUrl}/admin/gmail?connected=true`);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to complete authorization";
+    const message =
+      err instanceof Error ? err.message : "Failed to complete authorization";
     return NextResponse.redirect(
       `${baseUrl}/admin/gmail?error=${encodeURIComponent(message)}`
     );
