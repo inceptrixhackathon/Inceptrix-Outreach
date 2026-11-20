@@ -3,12 +3,15 @@ import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase-server";
 
 // --- ENCRYPTION HELPERS (AES-256-GCM) ---
-const ENCRYPTION_SECRET =
-  process.env.GMAIL_TOKEN_ENCRYPTION_KEY ||
-  "inceptrix-secure-default-key-32b-length!!";
+function getSecret(): string {
+  return (
+    process.env.GMAIL_TOKEN_ENCRYPTION_KEY ||
+    "inceptrix_secret_key_32bytes_outreach_2025!"
+  );
+}
 
 function getKey(): Buffer {
-  return crypto.scryptSync(ENCRYPTION_SECRET, "salt", 32);
+  return crypto.scryptSync(getSecret(), "salt", 32);
 }
 
 export function encrypt(text: string): string {
@@ -26,15 +29,39 @@ export function decrypt(encryptedText: string): string {
     throw new Error("Invalid encrypted token format");
   }
   const [ivHex, authTagHex, encrypted] = parts;
-  const decipher = crypto.createDecipheriv(
-    "aes-256-gcm",
-    getKey(),
-    Buffer.from(ivHex, "hex")
-  );
-  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
-  let decrypted = decipher.update(encrypted, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
+
+  const tryDecrypt = (secret: string) => {
+    const key = crypto.scryptSync(secret, "salt", 32);
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      key,
+      Buffer.from(ivHex, "hex")
+    );
+    decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  };
+
+  const primary = getSecret();
+  try {
+    return tryDecrypt(primary);
+  } catch {
+    const alternates = [
+      "inceptrix_secret_key_32bytes_outreach_2025!",
+      "inceptrix-secure-default-key-32b-length!!",
+    ];
+    for (const alt of alternates) {
+      if (alt !== primary) {
+        try {
+          return tryDecrypt(alt);
+        } catch {
+          // continue
+        }
+      }
+    }
+    throw new Error("Failed to decrypt stored token: Key mismatch or corrupted data.");
+  }
 }
 
 // --- GOOGLE OAUTH CLIENT ---

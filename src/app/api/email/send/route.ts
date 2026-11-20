@@ -123,7 +123,11 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json(
-        { error: "Authentication Required: Central Gmail account is not connected by leader." },
+        {
+          error: msg.includes("AUTH_REQUIRED")
+            ? "Central Gmail is not connected. Please connect it in Admin > Gmail Settings."
+            : `Gmail Authorization Error: ${msg}`,
+        },
         { status: 503 }
       );
     }
