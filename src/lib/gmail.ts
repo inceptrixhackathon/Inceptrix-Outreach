@@ -121,8 +121,20 @@ interface MimeOptions {
 
 export function buildMimeMessage(options: MimeOptions): string {
   const boundary = `__inceptrix_boundary_${Date.now()}__`;
+  const altBoundary = `__inceptrix_alt_${Date.now()}__`;
+
+  // Strip HTML tags to create a healthy text/plain fallback if none provided
+  const fallbackText =
+    options.text ||
+    options.html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, "\n")
+      .replace(/\n\s*\n/g, "\n\n")
+      .trim() ||
+    options.subject;
 
   const headers = [
+    `Date: ${new Date().toUTCString()}`,
     `To: ${options.to}`,
     `From: ${options.from}`,
     `Subject: =?utf-8?B?${Buffer.from(options.subject).toString("base64")}?=`,
@@ -133,21 +145,21 @@ export function buildMimeMessage(options: MimeOptions): string {
 
   const bodyParts = [
     `--${boundary}`,
-    "Content-Type: multipart/alternative; boundary=\"alt_boundary\"",
+    `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
     "",
-    "--alt_boundary",
+    `--${altBoundary}`,
     "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: 7bit",
+    "Content-Transfer-Encoding: 8bit",
     "",
-    options.text || options.subject,
+    fallbackText,
     "",
-    "--alt_boundary",
+    `--${altBoundary}`,
     "Content-Type: text/html; charset=utf-8",
-    "Content-Transfer-Encoding: 7bit",
+    "Content-Transfer-Encoding: 8bit",
     "",
     options.html,
     "",
-    "--alt_boundary--",
+    `--${altBoundary}--`,
     "",
   ];
 
